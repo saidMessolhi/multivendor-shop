@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Filament\Resources\VendorResource\Pages;
+
+use App\Filament\Resources\VendorResource;
+use Filament\Actions;
+use Filament\Resources\Pages\CreateRecord;
+use Filament\Resources\Pages\EditRecord;
+use Filament\Resources\Pages\ListRecords;
+
+class ListVendors extends ListRecords
+{
+    protected static string $resource = VendorResource::class;
+    protected function getHeaderActions(): array
+    {
+        return [Actions\CreateAction::make()];
+    }
+}
+
+class CreateVendor extends CreateRecord
+{
+    protected static string $resource = VendorResource::class;
+}
+
+class EditVendor extends EditRecord
+{
+    protected static string $resource = VendorResource::class;
+    protected function getHeaderActions(): array
+    {
+        return [Actions\DeleteAction::make()];
+    }
+}
