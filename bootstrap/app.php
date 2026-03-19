@@ -11,13 +11,15 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
-        then: function () {
-            Route::middleware('web')
-                ->group(base_path('routes/vendor.php'));
-        },
+       
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias([
+        $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class); // add this
+
+    $middleware->alias([
+        'auth'            => \Illuminate\Auth\Middleware\Authenticate::class,
+    
+      
             'role'            => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission'      => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'vendor.approved' => \App\Http\Middleware\EnsureVendorIsApproved::class,
