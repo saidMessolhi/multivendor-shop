@@ -34,12 +34,34 @@ class Review extends Model
 
     protected static function booted(): void
     {
+         static::saved(function (Review $review) {
+
+        if (!$review->product) return; // safety
+
+        $product = $review->product;
+
+        $stats = $product->reviews()
+            ->where('is_approved', true)
+            ->selectRaw('AVG(rating) as avg, COUNT(*) as count')
+            ->first();
+
+        $product->update([
+            'rating_avg'   => $stats->avg ?? 0,   // ✅ NEVER NULL
+            'rating_count' => $stats->count ?? 0,
+        ]);
+    });
+
+    /*
         static::saved(function (Review $review) {
             $review->product->update([
                 'rating_avg'   => $review->product->reviews()->where('is_approved', true)->avg('rating'),
                 'rating_count' => $review->product->reviews()->where('is_approved', true)->count(),
             ]);
         });
+        */
+
+
+       
     }
 
     public function product()

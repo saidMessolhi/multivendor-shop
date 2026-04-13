@@ -5,83 +5,125 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Review;
 use Illuminate\Http\Request;
 
-class ProductController extends Controller
-{
-    public function index(Request $request)
-    {
-        $query = Product::active()->with(['vendor', 'category'])->inStock();
+class ProductController extends Controller {
+    public function index( Request $request ) {
+        $query = Product::active()->with( [ 'vendor', 'category' ] )->inStock();
 
-        if ($request->search) {
-            $query->where('name', 'like', "%{$request->search}%");
+        if ( $request->search ) {
+            $query->where( 'name', 'like', "%{$request->search}%" );
         }
-        if ($request->category) {
-            $query->where('category_id', $request->category);
+        if ( $request->category ) {
+            $query->where( 'category_id', $request->category );
         }
-        if ($request->vendor) {
-            $query->where('vendor_id', $request->vendor);
+        if ( $request->vendor ) {
+            $query->where( 'vendor_id', $request->vendor );
         }
-        if ($request->min_price) {
-            $query->where('price', '>=', $request->min_price);
+        if ( $request->min_price ) {
+            $query->where( 'price', '>=', $request->min_price );
         }
-        if ($request->max_price) {
-            $query->where('price', '<=', $request->max_price);
+        if ( $request->max_price ) {
+            $query->where( 'price', '<=', $request->max_price );
         }
-        if ($request->featured) {
+        if ( $request->featured ) {
             $query->featured();
         }
 
-        $query = match($request->sort) {
-            'price_asc'  => $query->orderBy('price'),
-            'price_desc' => $query->orderByDesc('price'),
-            'rating'     => $query->orderByDesc('rating_avg'),
+        $query = match( $request->sort ) {
+            'price_asc'  => $query->orderBy( 'price' ),
+            'price_desc' => $query->orderByDesc( 'price' ),
+            'rating'     => $query->orderByDesc( 'rating_avg' ),
             'latest'     => $query->latest(),
             default      => $query->latest(),
-        };
+        }
+        ;
 
-        $products   = $query->paginate(config('shop.products_per_page', 12))->withQueryString();
-        $categories = Category::where('is_active', true)->get();
+        $products   = $query->paginate( config( 'shop.products_per_page', 12 ) )->withQueryString();
+        $categories = Category::where( 'is_active', true )->get();
 
-        return view('shop.products.index', compact('products', 'categories'));
+        return view( 'shop.products.index', compact( 'products', 'categories' ) );
     }
+    /*
 
-    public function show(Product $product)
-    {
-        abort_unless($product->status === 'active', 404);
+    public function show( Product $product ) {
+        abort_unless( $product->status === 'active', 404 );
 
-        $product->load(['vendor', 'category', 'variants', 'reviews.user']);
+        $product->load( [ 'vendor', 'category', 'variants', 'reviews.user' ] );
 
         $related = Product::active()
-            ->where('category_id', $product->category_id)
-            ->where('id', '!=', $product->id)
-            ->take(4)
-            ->get();
+        ->where( 'category_id', $product->category_id )
+        ->where( 'id', '!=', $product->id )
+        ->take( 4 )
+        ->get();
 
-        return view('shop.products.show', compact('product', 'related'));
+        return view( 'shop.products.show', compact( 'product', 'related' ) );
     }
 
-    public function byCategory(\App\Models\Category $category)
-    {
-        $products = Product::active()
-            ->where('category_id', $category->id)
-            ->with(['vendor'])
-            ->paginate(config('shop.products_per_page', 12));
+    */
 
-        return view('shop.products.index', compact('products', 'category'));
+    public function show( Product $product ) {
+        abort_if ( $product->status !== 'active', 404 );
+
+        $product->load( [ 'vendor', 'category' ] );
+
+        // Get approved reviews with pagination
+        $reviews = Review::with( 'user' )
+        ->where( 'product_id', $product->id )
+        ->where( 'is_approved', true )
+        ->latest()
+        ->paginate( 8 );
+
+        // Check if logged-in user can review
+        $canReview  = false;
+        $userReview = null;
+
+        if ( auth()->check() ) {
+            $userReview = Review::where( 'user_id', auth()->id() )
+            ->where( 'product_id', $product->id )
+            ->first();
+
+            if ( !$userReview ) {
+                $canReview = \App\Models\Order::where( 'user_id', auth()->id() )
+                ->where( 'payment_status', 'paid' )
+                ->whereHas( 'items', fn( $q ) => $q->where( 'product_id', $product->id ) )
+                ->exists();
+            }
+        }
+
+        // Related products
+        $related = Product::active()
+        ->where( 'category_id', $product->category_id )
+        ->where( 'id', '!=', $product->id )
+        ->with( 'vendor' )
+        ->take( 4 )
+        ->get();
+
+        return view( 'shop.products.show', compact(
+            'product', 'reviews', 'canReview', 'userReview', 'related'
+        ) );
     }
 
-    public function search(Request $request)
-    {
-        $q = $request->get('q');
+    public function byCategory( \App\Models\Category $category ) {
+        $products = Product::active()
+        ->where( 'category_id', $category->id )
+        ->with( [ 'vendor' ] )
+        ->paginate( config( 'shop.products_per_page', 12 ) );
+
+        return view( 'shop.products.index', compact( 'products', 'category' ) );
+    }
+
+    public function search( Request $request ) {
+        $q = $request->get( 'q' );
 
         $products = Product::active()
-            ->where('name', 'like', "%{$q}%")
-            ->orWhere('description', 'like', "%{$q}%")
-            ->with(['vendor'])
-            ->paginate(12)
-            ->withQueryString();
+        ->where( 'name', 'like', "%{$q}%" )
+        ->orWhere( 'description', 'like', "%{$q}%" )
+        ->with( [ 'vendor' ] )
+        ->paginate( 12 )
+        ->withQueryString();
 
-        return view('shop.products.index', compact('products', 'q'));
+        return view( 'shop.products.index', compact( 'products', 'q' ) );
     }
 }
